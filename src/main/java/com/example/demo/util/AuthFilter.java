@@ -36,8 +36,32 @@ public class AuthFilter implements Filter {
         }
         
         String path = req.getRequestURI();
+
+        // Admin-only notification endpoints — require the internal admin token header
+        if (path.equals("/api/notification/send-all") || path.equals("/api/notification/send-to-token")
+                || path.startsWith("/api/notification/send/")) {
+            String adminHeader = req.getHeader("X-Admin-Key");
+            String expectedKey = System.getenv("ADMIN_API_KEY");
+            if (expectedKey == null || expectedKey.isBlank() || !expectedKey.equals(adminHeader)) {
+                try {
+                    ((HttpServletResponse) response).sendError(HttpServletResponse.SC_FORBIDDEN,
+                            "Admin access required");
+                } catch (java.io.IOException e) {
+                    e.printStackTrace();
+                }
+                return;
+            }
+            try {
+                chain.doFilter(request, response);
+            } catch (java.io.IOException | ServletException e) {
+                e.printStackTrace();
+            }
+            return;
+        }
+
         // Skip token validation for public endpoints
-        if (path.equals("/api/verify-otp") || path.equals("/api/refresh") || path.equals("/api/login") || path.equals("/api/checkout")) {
+        if (path.equals("/api/verify-otp") || path.equals("/api/refresh") || path.equals("/api/login")
+                || path.equals("/api/checkout") || path.equals("/api/notification/health")) {
             try {
 				chain.doFilter(request, response);
 			} catch (java.io.IOException e) {

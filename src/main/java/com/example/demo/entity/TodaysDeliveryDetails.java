@@ -73,6 +73,12 @@ public class TodaysDeliveryDetails {
 
     @Column(name = "ModefiedTime")
     private LocalDate modefiedTime;
+    
+    @Column(name = "BusinessDate")
+    private LocalDate businessDate;
+
+    @Column(name = "DeliveredTime")
+    private LocalDateTime deliveredTime;
 
     // Getters and Setters
 
@@ -82,11 +88,12 @@ public class TodaysDeliveryDetails {
 		// TODO Auto-generated constructor stub
 	}
     
+	
 	public TodaysDeliveryDetails(Long id, String deliveryboyPhoneNumber, String numberCode, Long boxNumber,
 			Long customerId, String customerName, String address, String addressType, Integer districtId,
 			Double customerLatitude, Double customerLongitude, String deliveryTiming, Boolean isDelivered,
 			Integer reasonForNotDelivered, Long statusId, String createdBy, LocalDateTime createdTime,
-			String modefiedBy, LocalDate modefiedTime) {
+			String modefiedBy, LocalDate modefiedTime, LocalDate businessDate, LocalDateTime deliveredTime) {
 		super();
 		this.id = id;
 		this.deliveryboyPhoneNumber = deliveryboyPhoneNumber;
@@ -107,6 +114,8 @@ public class TodaysDeliveryDetails {
 		this.createdTime = createdTime;
 		this.modefiedBy = modefiedBy;
 		this.modefiedTime = modefiedTime;
+		this.businessDate = businessDate;
+		this.deliveredTime = deliveredTime;
 	}
 	public void setId(Long id) { this.id = id; }
 
@@ -164,5 +173,19 @@ public class TodaysDeliveryDetails {
     public LocalDate getModefiedTime() { return modefiedTime; }
     
     public void setModefiedTime(LocalDate modefiedTime) { this.modefiedTime = modefiedTime; }
+	public LocalDate getBusinessDate() {
+		return businessDate;
+	}
+	public void setBusinessDate(LocalDate businessDate) {
+		this.businessDate = businessDate;
+	}
+	public LocalDateTime getDeliveredTime() {
+		return deliveredTime;
+	}
+	public void setDeliveredTime(LocalDateTime deliveredTime) {
+		this.deliveredTime = deliveredTime;
+	}
+    
+    
 }
 

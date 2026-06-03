@@ -388,6 +388,27 @@ public class CustomaizationService {
 				sandwich.setSugar(getBD(row, indexMap, "sandwichSugar"));
 			}
 			dto.setSandwich(sandwich);
+			
+			//Jar
+			
+			IngredientDto jar = null;
+
+			Object jarNameObj = getValue(row, indexMap, "jarName");
+
+			if (jarNameObj != null) {
+
+			    jar = new IngredientDto();
+
+			    jar.setId(getLong(row, indexMap, "jarId"));
+
+			    jar.setName(jarNameObj.toString());
+
+			    Object q = getValue(row, indexMap, "jarQuantity");
+
+			    jar.setWeight(q != null ? q.toString() : null);
+			}
+
+			dto.setJar(jar);
 
 			responseList.add(dto);
 		}
@@ -500,7 +521,10 @@ public class CustomaizationService {
 		map.put("sandwichFat", i++);
 		map.put("sandwichCarboHydreate", i++);
 		map.put("sandwichSugar", i++);
-
+		//Jar
+		map.put("jarId", i++);
+		map.put("jarName", i++);
+		map.put("jarQuantity", i++);
 		return map;
 	}
 
@@ -604,6 +628,25 @@ public class CustomaizationService {
 
 			    if (id != null) {
 			        entity.setSandwichId(id);
+			    }
+			}
+			
+			//Jar
+			
+			if (request.getJar() != null) {
+
+			    Integer jarId = resolveId(
+			            request.getJar().getId(),
+			            request.getJar().getName()
+			    );
+
+			    if (jarId != null) {
+
+			        entity.setJarId(jarId);
+
+			        entity.setJarQuantity(
+			                request.getJar().getWeight()
+			        );
 			    }
 			}
 
@@ -789,7 +832,7 @@ public class CustomaizationService {
 	    if (name != null && !name.isBlank()) {
 	        return getFruitOrNutId(name); //  fallback to name
 	    }
-	    return null;
+	    return null; // (won�t happen in your case)
 	}
 	
 }    
