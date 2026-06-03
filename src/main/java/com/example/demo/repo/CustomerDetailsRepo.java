@@ -1,6 +1,7 @@
 package com.example.demo.repo;
 
 import java.math.BigDecimal;
+import java.sql.Date;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -178,7 +179,7 @@ public interface CustomerDetailsRepo extends JpaRepository<CustomerDetails, Long
 
 
 		
-		@Query(value = "SELECT paymentDoneTime  FROM customerdetails WHERE IsRenewed = 0 AND id =:customerId AND IsPaymentSuccess = 1 and StatusId=1;", nativeQuery = true)
+		@Query(value = "SELECT paymentDoneTime  FROM customerdetails WHERE id =:customerId AND IsPaymentSuccess = 1 and StatusId=1;", nativeQuery = true)
 		LocalDateTime  checkCustomaizationEnable(int customerId);
 
 		
@@ -305,7 +306,7 @@ public interface CustomerDetailsRepo extends JpaRepository<CustomerDetails, Long
 			       "FROM CustomerDetails c " +
 			       "WHERE c.id = :customerId")
 			CustomerPackDistrictProjection 
-			findPackAndDistrictByCustomerId(@Param("customerId") Long customerId);
+			findPackAndDistrictByCustomerId(Long customerId);
 
 			@Query(value = "SELECT customized_amount FROM customerdetails WHERE Id = :customerId AND DATE(ModefiedTime) = CURDATE() - INTERVAL 1 DAY", nativeQuery = true)
 			Long getYesterdayCustomizedAmount(@Param("customerId") Long customerId);
@@ -319,15 +320,11 @@ public interface CustomerDetailsRepo extends JpaRepository<CustomerDetails, Long
 			@Query(value="SELECT districtId FROM customerdetails WHERE id=:customerId", nativeQuery=true)
 			Integer findDistrictIdByCustomerId(@Param("customerId") Long customerId);
 
-	@Query(value = "SELECT DATE(NextRenewalDate) FROM customerdetails WHERE id = :customerId AND StatusId = 1", nativeQuery = true)
-		LocalDate findNextRenewalDateByCustomerId(@Param("customerId") long customerId);
+@Query(value = "SELECT DATE(NextRenewalDate) FROM customerdetails WHERE id = :customerId AND StatusId = 1", nativeQuery = true)
+	LocalDate findNextRenewalDateByCustomerId(@Param("customerId") long customerId);
 
-	@Query(value = "SELECT PromoCodeUsed FROM customerdetails WHERE Id = :customerId", nativeQuery = true)
-	String getPromoCodeUsed(@Param("customerId") Long customerId);
-			
-
+	@Transactional
 @Modifying
-@Transactional
 @Query("UPDATE CustomerDetails c " +
        "SET c.packDetailsId = :packId, " +
        "    c.paymentDoneTime = CURRENT_TIMESTAMP, " +
@@ -344,7 +341,70 @@ void updatePackDirect(@Param("customerId") Long customerId,
 	@Query("UPDATE CustomerDetails c SET c.startDate = :startDate WHERE c.id = :customerId")
 	void updateStartDate(@Param("customerId") Long customerId,
 	                     @Param("startDate") LocalDate startDate);
+	
+	@Modifying
+	@Transactional
+	@Query("UPDATE CustomerDetails c SET c.nextrenewalDate = :renewaldate WHERE c.id = :customerId")
+	void updateRenewalDate(@Param("customerId") Long customerId,
+	                     @Param("renewaldate") Date renewaldate);
 
+@Query(value = """
+		SELECT id FROM customerdetails 
+		WHERE IsCustomized = 1 
+		AND StatusId = 1 
+		AND IsPaymentSuccess = 1
+		""", nativeQuery = true)
+			List<Long> findAllCustomizedCustomerIds();
+
+			@Query(value = """
+				SELECT id FROM customerdetails 
+				WHERE IsCustomized = 0 
+				AND StatusId = 1 
+				AND IsPaymentSuccess = 1
+				AND NextRenewalDate >= CURRENT_DATE
+				""", nativeQuery = true)
+			List<Long> findAllNonCustomizedActiveCustomerIds();
+
+		/**
+		 * Lapsed subscribers only ({@code NextRenewalDate} before today — not active).
+		 * Rate limit: at most {@code maxInWindow} {@code renewal_reminder} logs in the last
+		 * {@code windowDays} days, and none in the last {@code minGapDays} days.
+		 */
+		@Query(value = """
+				SELECT c.Id FROM customerdetails c
+				WHERE c.IsPaymentSuccess = 1
+				  AND (c.isCancelled IS NULL OR c.isCancelled = 0)
+				  AND c.NextRenewalDate IS NOT NULL
+				  AND DATE(c.NextRenewalDate) < CURDATE()
+				  AND c.StatusId IN (1, 2)
+				  AND (
+				    SELECT COUNT(*) FROM notification_log nl
+				    WHERE nl.userId = c.Id
+				      AND nl.notificationType = 'renewal_reminder'
+				      AND nl.sentAt >= DATE_SUB(NOW(), INTERVAL :windowDays DAY)
+				  ) < :maxInWindow
+				  AND NOT EXISTS (
+				    SELECT 1 FROM notification_log nl
+				    WHERE nl.userId = c.Id
+				      AND nl.notificationType = 'renewal_reminder'
+				      AND nl.sentAt >= DATE_SUB(NOW(), INTERVAL :minGapDays DAY)
+				  )
+				""", nativeQuery = true)
+		List<Long> findCustomerIdsEligibleForLapsedRenewalReminder(
+				@Param("minGapDays") int minGapDays,
+				@Param("maxInWindow") int maxInWindow,
+				@Param("windowDays") int windowDays);
+
+		// @Query("SELECT c FROM CustomerDetails c WHERE c.customerStatusId = 3 AND c.statusId = 1")
+		// List<CustomerDetails> findActiveTomorrowCustomers();
+		@Query(value = """
+			SELECT * FROM customerdetails 
+			WHERE IsPaymentSuccess = 1 
+			AND StatusId = 1 
+			AND NextRenewalDate >= CURRENT_DATE
+			""", nativeQuery = true)
+		List<CustomerDetails> findActiveTomorrowCustomers();
+	
 
 
 

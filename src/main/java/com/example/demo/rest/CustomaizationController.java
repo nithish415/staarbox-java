@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.example.demo.dto.CustomizationSummaryDto;
 import com.example.demo.dto.CustomizedPackageRequest;
 import com.example.demo.dto.PackageResponseDto;
 import com.example.demo.entity.CustomerDetails;
@@ -34,5 +35,10 @@ public class CustomaizationController {
     public boolean saveCustomaizationDetails(@RequestBody CustomizedPackageRequest request) {
         return coustomaizationService.mapToEntity(request);
     }
+
+  //  @GetMapping("/tomorrow-summary")
+  //  public CustomizationSummaryDto getTomorrowSummary() {
+  //      return coustomaizationService.getTomorrowSummary();
+ //   }
 	
 }

@@ -3,17 +3,17 @@ package com.example.demo.service;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import com.example.demo.entity.CustomerDetails;
 import com.example.demo.dto.RenewalResponse;
+import com.example.demo.entity.CustomerDetails;
 import com.example.demo.entity.StagingRenewal;
 import com.example.demo.repo.CustomerDetailsRepo;
 import com.example.demo.repo.StagingRenewalRepo;
-
 
 @Service
 public class SubscriptionService {
@@ -31,95 +31,100 @@ public class SubscriptionService {
         CustomerDetails customer = customerRepo.findById(customerId)
                 .orElseThrow(() -> new RuntimeException("Customer not found"));
 
-        
-        // Long currentPack = customer.getPackDetailsId() != 0
-        
-        //         ? Long.valueOf(customer.getPackDetailsId())
-        //         : null;
         Long currentPack = Long.valueOf(customer.getPackDetailsId());
 
-        LocalDateTime renewalDate = customer.getNextrenewalDate() != null
-                ? customer.getNextrenewalDate().toInstant()
-                    .atZone(java.time.ZoneId.systemDefault())
-                    .toLocalDateTime()
-                : null;
+        // ? Fix LocalDate / Date conversion issue safely
+       
+     // ? REPLACE YOUR ENTIRE renewalDate BLOCK WITH THIS ONLY
+
+        LocalDateTime renewalDate = null;
+
+        if (customer.getNextrenewalDate() != null) {
+            renewalDate = customer.getNextrenewalDate()
+                    .toInstant()
+                    .atZone(ZoneId.systemDefault())
+                    .toLocalDateTime();
+        }
 
         LocalDateTime today = LocalDateTime.now();
 
-//        if (renewalDate == null) {
-//            throw new RuntimeException("Renewal date missing");
-//        }
-//
-//         if (currentPack != null && currentPack.equals(newPackId)) {
-//            return "No change in pack";
-//         }
+        // ? No renewal date = direct update
+        if (renewalDate == null || !renewalDate.isAfter(today)) {
 
-        
-         if (!renewalDate.isAfter(today)) {
-        	  LocalDateTime upcomingDate = addDeliveryDays(LocalDateTime.now(), DELIVERY_DAYS);
-        	  if (currentPack != null && currentPack.equals(newPackId)) {
-                  newPackId = currentPack; 
-               }
-             customerRepo.updatePackDirect(customerId, newPackId,upcomingDate);
-             customerRepo.updateStartDate(customerId, LocalDate.now());
-             return "Pack updated directly";
-         }
+            LocalDateTime upcomingDate = addDeliveryDays(today, DELIVERY_DAYS);
 
-         else {
-        Optional<StagingRenewal> existing = stagingRepo.findLatestUnprocessed(customerId);
+            // If same pack selected ? keep existing
+            if (currentPack != null && currentPack.equals(newPackId)) {
+                newPackId = currentPack;
+            }
 
-        StagingRenewal s;
-        if (existing.isPresent() ) {
-             s = existing.get();
+            customerRepo.updatePackDirect(customerId, newPackId, upcomingDate);
+
+            // ? New start date = today
+            customerRepo.updateStartDate(customerId, LocalDate.now());
+
+            return "Pack updated directly";
         }
 
-        //     StagingRenewal s = existing.get();
-        //     s.setNewPackId(newPackId);
-        //     s.setPaymentDate(LocalDateTime.now());
-        //     stagingRepo.save(s);
+        // =========================================================
+        // FUTURE RENEWAL ? INSERT OR UPDATE STAGING TABLE
+        // =========================================================
+        Optional<StagingRenewal> existingOpt =
+                stagingRepo.findLatestUnprocessed(customerId);
 
-        //     return "Staging updated";
+        StagingRenewal staging;
 
-        // } 
-        else {
+        if (existingOpt.isPresent()) {
 
-            s = new StagingRenewal();
-            s.setCustomerId(customerId);
-            s.setOldPackId(currentPack);
-            // s.setNewPackId(newPackId);
-            // s.setPaymentDate(LocalDateTime.now());
-            
-            s.setProcessed(false);
+            // ? UPDATE existing row instead of duplicate insert
+            staging = existingOpt.get();
 
+        } else {
+
+            // ? CREATE new row only if no unprocessed row exists
+            staging = new StagingRenewal();
+            staging.setCustomerId(customerId);
+            staging.setOldPackId(currentPack);
+            staging.setProcessed(false);
         }
-            s.setNewPackId(newPackId);
-            s.setPaymentDate(LocalDateTime.now());
 
-            // current renewal date (from customer)
-            s.setCurrentRenewalDate(renewalDate);
+        // ? Always update latest requested values
+        staging.setNewPackId(newPackId);
+        staging.setPaymentDate(LocalDateTime.now());
 
-            // upcoming renewal date (example logic)
-            // s.setUpcomingRenewalDate(renewalDate.plusDays(30));
+        // Current customer renewal
+        staging.setCurrentRenewalDate(renewalDate);
 
-            // ? 26 delivery days excluding Sunday
+        // New cycle after current cycle ends
         LocalDateTime upcomingDate = addDeliveryDays(renewalDate, DELIVERY_DAYS);
-        s.setUpcomingRenewalDate(upcomingDate);
-        s.setNextRenewalDate(upcomingDate);
 
+        // Scheduler trigger date
+        staging.setNextRenewalDate(renewalDate);
 
-            // renewal done time
-            s.setRenewalStartDate(renewalDate.plusDays(1));
+        // New pack cycle
+        staging.setUpcomingRenewalDate(upcomingDate);
 
-            System.out.println("Saving staging:");
-            System.out.println("CustomerId: " + s.getCustomerId());
-            System.out.println("OldPackId: " + s.getOldPackId());
-            System.out.println("NewPackId: " + s.getNewPackId());
-            
-            stagingRepo.save(s);
-            return "Saved in staging";
-    }}
+        // Start next day after current renewal
+        staging.setRenewalStartDate(renewalDate.plusDays(1));
 
-        // CORE SUBSCRIPTION LOGIC
+        System.out.println("Saving staging:");
+        System.out.println("CustomerId: " + staging.getCustomerId());
+        System.out.println("OldPackId: " + staging.getOldPackId());
+        System.out.println("NewPackId: " + staging.getNewPackId());
+        System.out.println("CurrentRenewalDate: " + staging.getCurrentRenewalDate());
+        System.out.println("NextRenewalDate: " + staging.getNextRenewalDate());
+
+        // ? Saves insert or update automatically
+        stagingRepo.save(staging);
+
+        return existingOpt.isPresent()
+                ? "Existing staging updated"
+                : "Saved in staging";
+    }
+
+    // =========================================================
+    // CORE DELIVERY CALCULATION (Skip Sundays)
+    // =========================================================
     private LocalDateTime addDeliveryDays(LocalDateTime startDate, int days) {
 
         LocalDateTime result = startDate;
@@ -135,6 +140,10 @@ public class SubscriptionService {
 
         return result;
     }
+
+    // =========================================================
+    // GET CUSTOMER RENEWAL DETAILS
+    // =========================================================
     public RenewalResponse getRenewalDetails(Long customerId) {
 
         CustomerDetails customer = customerRepo.findById(customerId)
@@ -148,48 +157,26 @@ public class SubscriptionService {
         response.setCustomerId(customerId);
         response.setCurrentPackId(Long.valueOf(customer.getPackDetailsId()));
         response.setCurrentNextRenewalDate(customer.getNextrenewalDate());
-System.out.println(response.getCurrentNextRenewalDate());
 
         if (stagingOpt.isPresent()) {
+
             StagingRenewal s = stagingOpt.get();
 
             response.setRenewalAvailable(true);
             response.setNewPackId(s.getNewPackId());
             response.setPaymentDate(s.getPaymentDate());
-            response.setUpcomingRenewalEndDate(s.getUpcomingRenewalDate());
+
+            // Current subscription end
             response.setUpcomingRenewalStartDate(s.getRenewalStartDate());
 
+            // New subscription end after renewal
+            response.setUpcomingRenewalEndDate(s.getUpcomingRenewalDate());
+
         } else {
+
             response.setRenewalAvailable(false);
         }
 
         return response;
     }
-
-//    public RenewalResponse getRenewalDetails(Long customerId) {
-//
-//        CustomerDetails customer = customerRepo.findById(customerId)
-//                .orElseThrow(() -> new RuntimeException("Customer not found"));
-//
-//        Optional<StagingRenewal> stagingOpt = stagingRepo.findByCustomerId(customerId);
-//
-//        RenewalResponse response = new RenewalResponse();
-//
-//        response.setCustomerId(customerId);
-//        response.setCurrentPackId(Long.valueOf(customer.getPackDetailsId()));
-//        response.setCurrentNextRenewalDate(customer.getNextrenewalDate());
-//
-//        if (stagingOpt.isPresent()) {
-//            StagingRenewal s = stagingOpt.get();
-//
-//            response.setRenewalAvailable(true);
-//            response.setNewPackId(s.getNewPackId());
-//            response.setPaymentDate(s.getPaymentDate());
-//            response.setUpcomingRenewalDate(s.getNextRenewalDate());
-//            response.setUpcomingRenewalDate(s.getUpcomingRenewalDate());
-//        } else {
-//            response.setRenewalAvailable(false);
-//        }
-//        return response;
-//    }
 }
