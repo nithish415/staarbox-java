@@ -5,6 +5,7 @@ import java.util.List;
 import com.example.demo.service.NotificationService;
 import com.example.demo.util.MessageTemplates;
 import com.example.demo.util.MessageTemplates.NotificationData;
+import com.example.demo.util.NotificationSchedulePolicy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,6 +35,10 @@ public class NotificationScheduler {
     @Scheduled(cron = "0 0 5 * * ?", zone = "Asia/Kolkata")
     public void foodReady() {
         logger.info("CRON triggered: Food Ready - 5:00 AM");
+        if (!NotificationSchedulePolicy.shouldSendDeliveryNotifications()) {
+            logger.info("Skipping Food Ready on Sunday (no delivery day)");
+            return;
+        }
         try {
             NotificationData data = MessageTemplates.getFoodReady();
             notificationService.sendToAllUsers(data.title, data.message, data.type);
@@ -48,6 +53,10 @@ public class NotificationScheduler {
     @Scheduled(cron = "0 0 6 * * ?", zone = "Asia/Kolkata")
     public void morningDelivery() {
         logger.info("CRON triggered: Morning Delivery - 6:00 AM");
+        if (!NotificationSchedulePolicy.shouldSendDeliveryNotifications()) {
+            logger.info("Skipping Morning Delivery on Sunday (no delivery day)");
+            return;
+        }
         try {
             NotificationData data = MessageTemplates.getMorningDelivery();
             notificationService.sendToAllUsers(data.title, data.message, data.type);
@@ -62,6 +71,10 @@ public class NotificationScheduler {
     @Scheduled(cron = "0 30 6 * * ?", zone = "Asia/Kolkata")
     public void outForDispatch() {
         logger.info("CRON triggered: Out for Dispatch - 6:30 AM");
+        if (!NotificationSchedulePolicy.shouldSendDeliveryNotifications()) {
+            logger.info("Skipping Out for Dispatch on Sunday (no delivery day)");
+            return;
+        }
         try {
             NotificationData data = MessageTemplates.getDispatch();
             notificationService.sendToAllUsers(data.title, data.message, data.type);
@@ -76,6 +89,10 @@ public class NotificationScheduler {
     @Scheduled(cron = "0 0 7 * * ?", zone = "Asia/Kolkata")
     public void breakfastTip() {
         logger.info("CRON triggered: Breakfast Tip - 7:00 AM");
+        if (!NotificationSchedulePolicy.shouldSendDeliveryNotifications()) {
+            logger.info("Skipping Breakfast Tip on Sunday (no delivery day)");
+            return;
+        }
         try {
             NotificationData data = MessageTemplates.getBreakfastTip();
             notificationService.sendToAllUsers(data.title, data.message, data.type);
@@ -90,6 +107,10 @@ public class NotificationScheduler {
     @Scheduled(cron = "0 30 9 * * ?", zone = "Asia/Kolkata")
     public void customizationOpen() {
         logger.info("CRON triggered: Customization Open - 9:30 AM");
+        if (!NotificationSchedulePolicy.shouldSendCustomizationNotifications()) {
+            logger.info("Skipping Customization Open on Saturday (delivery day, no customization reminders)");
+            return;
+        }
         try {
             NotificationData data = MessageTemplates.getCustomizationOpen();
             notificationService.sendToAllUsers(data.title, data.message, data.type);
@@ -118,6 +139,10 @@ public class NotificationScheduler {
     @Scheduled(cron = "0 0 14 * * ?", zone = "Asia/Kolkata")
     public void customizationReminder() {
         logger.info("CRON triggered: Customization Reminder - 2:00 PM");
+        if (!NotificationSchedulePolicy.shouldSendCustomizationNotifications()) {
+            logger.info("Skipping Customization Reminder on Saturday (delivery day, no customization reminders)");
+            return;
+        }
         try {
             NotificationData data = MessageTemplates.getCustomizationReminder();
             notificationService.sendToAllUsers(data.title, data.message, data.type);
@@ -132,6 +157,10 @@ public class NotificationScheduler {
     @Scheduled(cron = "0 45 18 * * ?", zone = "Asia/Kolkata")
     public void lastReminder() {
         logger.info("CRON triggered: Last Reminder - 6:45 PM");
+        if (!NotificationSchedulePolicy.shouldSendCustomizationNotifications()) {
+            logger.info("Skipping Last Reminder on Saturday (delivery day, no customization reminders)");
+            return;
+        }
         try {
             NotificationData data = MessageTemplates.getLastReminder();
             notificationService.sendToAllUsers(data.title, data.message, data.type);
@@ -146,6 +175,10 @@ public class NotificationScheduler {
     @Scheduled(cron = "0 30 19 * * ?", zone = "Asia/Kolkata")
     public void customizationClosed() {
         logger.info("CRON triggered: Customization Closed - 7:30 PM");
+        if (!NotificationSchedulePolicy.shouldSendCustomizationNotifications()) {
+            logger.info("Skipping Customization Closed on Saturday (delivery day, no customization reminders)");
+            return;
+        }
         try {
             NotificationData data = MessageTemplates.getClosed();
             notificationService.sendToAllUsers(data.title, data.message, data.type);
