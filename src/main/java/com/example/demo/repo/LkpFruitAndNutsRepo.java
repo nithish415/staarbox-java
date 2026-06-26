@@ -1,5 +1,6 @@
 package com.example.demo.repo;
 
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -17,5 +18,11 @@ public interface LkpFruitAndNutsRepo extends JpaRepository<LkpFruitAndNuts, Long
 	@Query(value = "SELECT * FROM lkpfruitandnuts WHERE LOWER(FruitAndNuts) = LOWER(:fruitAndNuts) LIMIT 1", nativeQuery = true)
 	Optional<LkpFruitAndNuts> findByFruitAndNutsIgnoreCase(@Param("fruitAndNuts") String fruitAndNuts);
 
+	@Query(value = """
+			SELECT * FROM lkpfruitandnuts
+			WHERE LOWER(Category) = 'jar' AND StatusId = 1
+			ORDER BY Id
+			""", nativeQuery = true)
+	List<LkpFruitAndNuts> findAllActiveJars();
 
 }
