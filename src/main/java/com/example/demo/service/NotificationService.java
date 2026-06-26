@@ -12,9 +12,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
-import java.util.stream.Collectors;
+import java.util.Set;
 
 @Service
 public class NotificationService {
@@ -46,17 +50,15 @@ public class NotificationService {
             return;
         }
 
-        // Filter devices based on user preferences and subscription status
-        List<UserDevice> eligibleDevices = allDevices.stream()
-                .filter(device -> shouldSendNotification(device.getUserId(), notificationType))
-                .collect(Collectors.toList());
+        // One physical device can be registered under multiple active customer profiles.
+        List<UserDevice> eligibleDevices = selectEligibleDevicesOncePerToken(allDevices, notificationType);
 
         if (eligibleDevices.isEmpty()) {
             logger.info("No eligible devices after filtering | type={}", notificationType);
             return;
         }
 
-        logger.info("Sending notification to all users | type={} | eligibleDevices={} | totalDevices={}", 
+        logger.info("Sending notification to all users | type={} | eligibleDevices={} | totalDevices={}",
                    notificationType, eligibleDevices.size(), allDevices.size());
 
         fcmService.sendBatch(eligibleDevices, title, message, notificationType);
@@ -122,6 +124,7 @@ public class NotificationService {
             return;
         }
 
+        Set<String> sentTokens = new HashSet<>();
         int sent = 0;
         for (Long userId : userIds) {
             if (!preferencesAllowRenewalReminder(userId)) {
@@ -132,12 +135,16 @@ public class NotificationService {
                 continue;
             }
             for (UserDevice device : devices) {
+                String token = device.getDeviceToken();
+                if (token == null || token.isBlank() || !sentTokens.add(token)) {
+                    continue;
+                }
                 fcmService.sendNotification(device, title, message, notificationType);
+                sent++;
             }
-            sent++;
         }
 
-        logger.info("Lapsed renewal reminders | eligible={} | usersSent={}", userIds.size(), sent);
+        logger.info("Lapsed renewal reminders | eligibleProfiles={} | devicesSent={}", userIds.size(), sent);
     }
 
     private boolean preferencesAllowRenewalReminder(Long userId) {
@@ -229,6 +236,44 @@ public class NotificationService {
         existing.setMarketingEnabled(preferences.isMarketingEnabled());
         
         return preferenceRepository.save(existing);
+    }
+
+    private List<UserDevice> selectEligibleDevicesOncePerToken(
+            List<UserDevice> devices,
+            String notificationType) {
+        Map<String, UserDevice> bestDevicePerToken = new LinkedHashMap<>();
+
+        for (UserDevice device : devices) {
+            if (device == null || !device.isActive()) {
+                continue;
+            }
+
+            String token = device.getDeviceToken();
+            if (token == null || token.isBlank()) {
+                continue;
+            }
+
+            if (!shouldSendNotification(device.getUserId(), notificationType)) {
+                continue;
+            }
+
+            UserDevice existing = bestDevicePerToken.get(token);
+            if (existing == null || isPreferredDevice(device, existing)) {
+                bestDevicePerToken.put(token, device);
+            }
+        }
+
+        return new ArrayList<>(bestDevicePerToken.values());
+    }
+
+    private boolean isPreferredDevice(UserDevice candidate, UserDevice current) {
+        if (candidate.getLastUsedAt() == null) {
+            return false;
+        }
+        if (current.getLastUsedAt() == null) {
+            return true;
+        }
+        return candidate.getLastUsedAt().isAfter(current.getLastUsedAt());
     }
 
     /**
