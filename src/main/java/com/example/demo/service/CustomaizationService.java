@@ -1,6 +1,7 @@
 package com.example.demo.service;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -39,6 +40,7 @@ import com.example.demo.repo.PackageTypeRepo;
 public class CustomaizationService {
 
 	private static final int FRUIT_JAR_PACK_DETAILS_ID = 15;
+	private static final int DELIVERY_DAYS_PER_PLAN = 26;
 
 	// @Autowired
 	// private CustomerDetailsRepo customerRepo;
@@ -136,7 +138,7 @@ public class CustomaizationService {
         Map<String, Integer> indexMap = getIndexMap();
 		List<LkpFruitAndNuts> activeJars = lkpFruitAndNutsRepo.findAllActiveJars();
 		int packDetailsId = customer.getPackDetailsId();
-		Map<Long, BigDecimal> jarDailyPrices = loadJarDailyPrices(customer.getDistrictId());
+		Map<Long, BigDecimal> jarDailyPrices = loadJarDailyPrices(packDetailsId, customer.getDistrictId());
 
         for (Object[] row : response) {
 
@@ -305,7 +307,18 @@ public class CustomaizationService {
 		}
 	}
 
-	private Map<Long, BigDecimal> loadJarDailyPrices(int districtId) {
+	private Map<Long, BigDecimal> loadJarDailyPrices(int packDetailsId, int districtId) {
+		if (packDetailsId == FRUIT_JAR_PACK_DETAILS_ID) {
+			BigDecimal fruitJarDailyPrice = resolveFruitJarDailyPrice(packDetailsId, districtId);
+			Map<Long, BigDecimal> prices = new HashMap<>();
+			for (LkpFruitAndNuts jar : lkpFruitAndNutsRepo.findAllActiveJars()) {
+				if (jar.getId() != null) {
+					prices.put(jar.getId().longValue(), fruitJarDailyPrice);
+				}
+			}
+			return prices;
+		}
+
 		Map<Long, BigDecimal> prices = new HashMap<>();
 		for (Object[] row : availableSandwichesRepository.findJarRatesByDistrict(districtId)) {
 			if (row[0] == null || row[1] == null) {
@@ -318,6 +331,15 @@ public class CustomaizationService {
 			prices.put(jarId, rate);
 		}
 		return prices;
+	}
+
+	private BigDecimal resolveFruitJarDailyPrice(int packDetailsId, int districtId) {
+		Long packageRate = customerDetailsRepo.getPackageRate((long) packDetailsId, (long) districtId);
+		if (packageRate == null || packageRate <= 0) {
+			return BigDecimal.ZERO;
+		}
+		return BigDecimal.valueOf(packageRate)
+				.divide(BigDecimal.valueOf(DELIVERY_DAYS_PER_PLAN), 2, RoundingMode.HALF_UP);
 	}
 
 	private List<OptionalIngredientDto> appendJarOptionals(
