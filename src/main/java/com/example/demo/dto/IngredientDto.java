@@ -12,6 +12,7 @@ public class IngredientDto {
 	private BigDecimal fat;
 	private BigDecimal carboHydreate;
 	private BigDecimal sugar;
+	private BigDecimal dailyPrice;
 	
 	
 	
@@ -100,6 +101,14 @@ public class IngredientDto {
 	}
 	public void setSugar(BigDecimal sugar) {
 		this.sugar = sugar;
+	}
+
+	public BigDecimal getDailyPrice() {
+		return dailyPrice;
+	}
+
+	public void setDailyPrice(BigDecimal dailyPrice) {
+		this.dailyPrice = dailyPrice;
 	}
 
 	// Constructor
