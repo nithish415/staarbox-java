@@ -440,7 +440,7 @@ public class CustomaizationService {
 		if (packDetailsId == FRUIT_JAR_PACK_DETAILS_ID) {
 			IngredientDto selectedJar = dto.getJar();
 			dto.setOptionals(removeJarOptionals(dto.getOptionals()));
-			enrichJarWithMacros(selectedJar, activeJars);
+			enrichJarWithMacros(selectedJar, activeJars, jarDailyPrices);
 			dto.setOptionals(appendJarOptionals(
 					dto.getOptionals(),
 					activeJars,
@@ -460,7 +460,7 @@ public class CustomaizationService {
 				false));
 
 		if (selectedJar != null && selectedJar.getId() != null) {
-			enrichJarWithMacros(selectedJar, activeJars);
+			enrichJarWithMacros(selectedJar, activeJars, jarDailyPrices);
 			dto.setJar(selectedJar);
 		} else {
 			dto.setJar(null);
@@ -560,7 +560,10 @@ public class CustomaizationService {
 		return name;
 	}
 
-	private void enrichJarWithMacros(IngredientDto jar, List<LkpFruitAndNuts> activeJars) {
+	private void enrichJarWithMacros(
+			IngredientDto jar,
+			List<LkpFruitAndNuts> activeJars,
+			Map<Long, BigDecimal> jarDailyPrices) {
 		if (jar == null || jar.getId() == null) {
 			return;
 		}
@@ -575,6 +578,7 @@ public class CustomaizationService {
 					jar.setFat(j.getFat());
 					jar.setCarboHydreate(j.getCarboHydreate());
 					jar.setSugar(j.getSugar());
+					jar.setDailyPrice(jarDailyPrices.get(jar.getId()));
 				});
 	}
 
