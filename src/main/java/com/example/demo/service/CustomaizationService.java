@@ -8,9 +8,12 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -22,6 +25,7 @@ import com.example.demo.dto.PackageResponseDto;
 import com.example.demo.entity.CustomerDetails;
 import com.example.demo.entity.CustomizedPackageDetails;
 import com.example.demo.entity.LkpFruitAndNuts;
+import com.example.demo.repo.AvailableSandwichesRepository;
 import com.example.demo.repo.CommonandPragnentpackDetailsRepo;
 import com.example.demo.repo.CustomerDetailsRepo;
 import com.example.demo.repo.CustomizedpackagedetailsRepo;
@@ -30,6 +34,9 @@ import com.example.demo.repo.PackageTypeRepo;
 
 @Service
 public class CustomaizationService {
+
+	private static final int FRUIT_JAR_PACK_DETAILS_ID = 15;
+
 	// @Autowired
 	// private CustomerDetailsRepo customerRepo;
 
@@ -47,6 +54,9 @@ public class CustomaizationService {
 
 	@Autowired
 	private LkpFruitAndNutsRepo lkpFruitAndNutsRepo;
+
+	@Autowired
+	private AvailableSandwichesRepository availableSandwichesRepository;
 
 	@Autowired
 	private CustomerDetailsRepo customerDetailsRepo;
@@ -237,6 +247,9 @@ public class CustomaizationService {
 		}
 		List<PackageResponseDto> responseList = new ArrayList<>();
 		Map<String, Integer> indexMap = getIndexMap();
+		List<LkpFruitAndNuts> activeJars = lkpFruitAndNutsRepo.findAllActiveJars();
+		int packDetailsId = customer.getPackDetailsId();
+		Map<Long, BigDecimal> jarDailyPrices = loadJarDailyPrices(customer.getDistrictId());
 
 		for (Object[] row : response) {
 
@@ -409,12 +422,206 @@ public class CustomaizationService {
 			}
 
 			dto.setJar(jar);
+			applyJarPresentationRules(dto, packDetailsId, activeJars, jarDailyPrices);
+			normalizeResponseCategories(dto);
 
 			responseList.add(dto);
 		}
 
 		return responseList;
 
+	}
+
+	private void applyJarPresentationRules(
+			PackageResponseDto dto,
+			int packDetailsId,
+			List<LkpFruitAndNuts> activeJars,
+			Map<Long, BigDecimal> jarDailyPrices) {
+		if (packDetailsId == FRUIT_JAR_PACK_DETAILS_ID) {
+			IngredientDto selectedJar = dto.getJar();
+			dto.setOptionals(removeJarOptionals(dto.getOptionals()));
+			enrichJarWithMacros(selectedJar, activeJars, jarDailyPrices);
+			dto.setOptionals(appendJarOptionals(
+					dto.getOptionals(),
+					activeJars,
+					jarDailyPrices,
+					selectedJar,
+					true));
+			return;
+		}
+
+		IngredientDto selectedJar = dto.getJar();
+		dto.setNuts(removeJarIngredients(dto.getNuts()));
+		dto.setOptionals(appendJarOptionals(
+				removeJarOptionals(dto.getOptionals()),
+				activeJars,
+				jarDailyPrices,
+				selectedJar,
+				false));
+
+		if (selectedJar != null && selectedJar.getId() != null) {
+			enrichJarWithMacros(selectedJar, activeJars, jarDailyPrices);
+			dto.setJar(selectedJar);
+		} else {
+			dto.setJar(null);
+		}
+	}
+
+	private Map<Long, BigDecimal> loadJarDailyPrices(int districtId) {
+		Map<Long, BigDecimal> prices = new HashMap<>();
+		for (Object[] row : availableSandwichesRepository.findJarRatesByDistrict(districtId)) {
+			if (row[0] == null || row[1] == null) {
+				continue;
+			}
+			Long jarId = row[0] instanceof Number number ? number.longValue() : Long.valueOf(row[0].toString());
+			BigDecimal rate = row[1] instanceof BigDecimal decimal
+					? decimal
+					: new BigDecimal(row[1].toString());
+			prices.put(jarId, rate);
+		}
+		return prices;
+	}
+
+	private List<OptionalIngredientDto> appendJarOptionals(
+			List<OptionalIngredientDto> optionals,
+			List<LkpFruitAndNuts> activeJars,
+			Map<Long, BigDecimal> jarDailyPrices,
+			IngredientDto selectedJar,
+			boolean excludeSelectedJar) {
+		List<OptionalIngredientDto> result = new ArrayList<>(optionals);
+		Set<Long> existingIds = result.stream()
+				.map(OptionalIngredientDto::getId)
+				.filter(id -> id != null)
+				.collect(Collectors.toCollection(HashSet::new));
+
+		Long selectedJarId = selectedJar != null ? selectedJar.getId() : null;
+
+		for (LkpFruitAndNuts jar : activeJars) {
+			Long jarId = jar.getId() != null ? jar.getId().longValue() : null;
+			if (jarId == null || existingIds.contains(jarId)) {
+				continue;
+			}
+			if (excludeSelectedJar && selectedJarId != null && jarId.equals(selectedJarId)) {
+				continue;
+			}
+
+			OptionalIngredientDto opt = toJarOptional(jar, jarDailyPrices);
+			if (!excludeSelectedJar
+					&& selectedJarId != null
+					&& jarId.equals(selectedJarId)
+					&& selectedJar.getWeight() != null
+					&& !selectedJar.getWeight().isBlank()) {
+				opt.setWeight(selectedJar.getWeight());
+			}
+			result.add(opt);
+			existingIds.add(jarId);
+		}
+		return result;
+	}
+
+	private List<OptionalIngredientDto> removeJarOptionals(List<OptionalIngredientDto> optionals) {
+		return optionals.stream()
+				.filter(opt -> !isJarCategory(opt.getCategory()))
+				.collect(Collectors.toCollection(ArrayList::new));
+	}
+
+	private List<IngredientDto> removeJarIngredients(List<IngredientDto> items) {
+		return items.stream()
+				.filter(item -> !isJarCategory(item.getCategory()))
+				.collect(Collectors.toCollection(ArrayList::new));
+	}
+
+	private OptionalIngredientDto toJarOptional(LkpFruitAndNuts jar, Map<Long, BigDecimal> jarDailyPrices) {
+		OptionalIngredientDto opt = new OptionalIngredientDto();
+		Long jarId = jar.getId() != null ? jar.getId().longValue() : null;
+		opt.setId(jarId);
+		opt.setName(formatJarDisplayName(jar.getFruitAndNuts()));
+		opt.setCategory(jar.getCategory());
+		opt.setWeight(null);
+		opt.setIsFruit(false);
+		opt.setProtein(jar.getProtein());
+		opt.setFiber(jar.getFiber());
+		opt.setFat(jar.getFat());
+		opt.setCarboHydreate(jar.getCarboHydreate());
+		opt.setSugar(jar.getSugar());
+		if (jarId != null) {
+			opt.setDailyPrice(jarDailyPrices.get(jarId));
+		}
+		return opt;
+	}
+
+	private String formatJarDisplayName(String name) {
+		if (name == null) {
+			return null;
+		}
+		if ("MilkJar".equalsIgnoreCase(name)) {
+			return "Milk Jar";
+		}
+		return name;
+	}
+
+	private void enrichJarWithMacros(
+			IngredientDto jar,
+			List<LkpFruitAndNuts> activeJars,
+			Map<Long, BigDecimal> jarDailyPrices) {
+		if (jar == null || jar.getId() == null) {
+			return;
+		}
+		activeJars.stream()
+				.filter(j -> j.getId() != null && jar.getId().equals(j.getId().longValue()))
+				.findFirst()
+				.ifPresent(j -> {
+					jar.setName(formatJarDisplayName(j.getFruitAndNuts()));
+					jar.setCategory(j.getCategory());
+					jar.setProtein(j.getProtein());
+					jar.setFiber(j.getFiber());
+					jar.setFat(j.getFat());
+					jar.setCarboHydreate(j.getCarboHydreate());
+					jar.setSugar(j.getSugar());
+					jar.setDailyPrice(jarDailyPrices.get(jar.getId()));
+				});
+	}
+
+	private boolean isJarCategory(String category) {
+		return category != null && category.equalsIgnoreCase("jar");
+	}
+
+	private void normalizeResponseCategories(PackageResponseDto dto) {
+		normalizeIngredientCategory(dto.getEggOrSeed());
+		if (dto.getFruits() != null) {
+			dto.getFruits().forEach(this::normalizeIngredientCategory);
+		}
+		if (dto.getNuts() != null) {
+			dto.getNuts().forEach(this::normalizeIngredientCategory);
+		}
+		if (dto.getOptionals() != null) {
+			dto.getOptionals().forEach(this::normalizeOptionalCategory);
+		}
+		normalizeIngredientCategory(dto.getSandwich());
+		normalizeIngredientCategory(dto.getJar());
+	}
+
+	private void normalizeIngredientCategory(IngredientDto ingredient) {
+		if (ingredient != null) {
+			ingredient.setCategory(normalizeCategory(ingredient.getCategory()));
+		}
+	}
+
+	private void normalizeOptionalCategory(OptionalIngredientDto optional) {
+		if (optional != null) {
+			optional.setCategory(normalizeCategory(optional.getCategory()));
+		}
+	}
+
+	private String normalizeCategory(String category) {
+		if (category == null) {
+			return null;
+		}
+		String compact = category.trim().toLowerCase().replace(" ", "");
+		if ("nuts&seeds".equals(compact)) {
+			return "nuts&seeds";
+		}
+		return category.trim();
 	}
 
 	private Long getLong(Object[] row, Map<String, Integer> indexMap, String key) {

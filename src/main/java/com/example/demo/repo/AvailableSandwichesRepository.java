@@ -1,9 +1,11 @@
 package com.example.demo.repo;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import com.example.demo.dto.SandwichDTO;
@@ -28,4 +30,15 @@ import com.example.demo.entity.AvailableSandwiches;
 	           "ORDER BY s.sandwichName ASC")
 	    List<SandwichDTO> findByDistrictAndCategory(
 	            Integer districtId, String category);
+
+	    @Query("SELECT s.rate FROM AvailableSandwiches s " +
+	           "WHERE s.districtId = :districtId AND s.lkpId = :lkpId")
+	    BigDecimal findRateByLkpIdAndDistrict(
+	            @Param("districtId") Integer districtId,
+	            @Param("lkpId") Long lkpId);
+
+	    @Query("SELECT s.lkpId, s.rate FROM AvailableSandwiches s " +
+	           "WHERE s.districtId = :districtId " +
+	           "AND LOWER(s.category) = 'jar'")
+	    List<Object[]> findJarRatesByDistrict(Integer districtId);
 }

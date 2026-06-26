@@ -13,6 +13,7 @@ public class OptionalIngredientDto {
 	private BigDecimal fat;
 	private BigDecimal carboHydreate;
 	private BigDecimal sugar;
+	private BigDecimal dailyPrice;
 
 	public OptionalIngredientDto() {
 		super();
@@ -116,6 +117,14 @@ public class OptionalIngredientDto {
 
 	public void setCategory(String category) {
 		this.category = category;
+	}
+
+	public BigDecimal getDailyPrice() {
+		return dailyPrice;
+	}
+
+	public void setDailyPrice(BigDecimal dailyPrice) {
+		this.dailyPrice = dailyPrice;
 	}
 
 }
