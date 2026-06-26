@@ -626,7 +626,7 @@ public class CustomaizationService {
             Integer id = resolveId(request.getSandwich().getId(), request.getSandwich().getName());
             if (id != null) entity.setSandwichId(id);
         }
-			}
+			
 			
 			//Jar
 			
@@ -740,148 +740,148 @@ public class CustomaizationService {
     // ============================================================
     // getTomorrowSummary — FIXED VERSION
     // ============================================================
-    public CustomizationSummaryDto getTomorrowSummary() {
-
-        // 1. Tomorrow's date
-        LocalDate tomorrow = LocalDate.now().plusDays(1);
-
-        // 2. WeekdayId — tomorrow's day value (Mon=1 ... Sun=7)
-        int weekdayId = getWeekday(tomorrow);
-
-        // Time range for querying customizations saved for tomorrow
-        LocalDateTime start = tomorrow.atStartOfDay();
-        LocalDateTime end   = tomorrow.atTime(LocalTime.MAX);
-
-        System.out.println("DEBUG Date    : " + tomorrow);
-        System.out.println("DEBUG WeekdayId: " + weekdayId);
-
-        // 3. Active customers for tomorrow (customerStatusId = 3)
-        List<CustomerDetails> allCustomers =
-                customerDetailsRepo.findActiveTomorrowCustomers();
-
-        // 4. Customizations saved for tomorrow (weekdayId + date window)
-        List<CustomizedPackageDetails> customizedList =
-                customizedpackagedetailsRepo.getTomorrowCustomizations(weekdayId, start, end);
-
-        // Map: customerId → their customization row
-        Map<Long, CustomizedPackageDetails> customizedMap =
-                customizedList.stream()
-                        .collect(Collectors.toMap(
-                                CustomizedPackageDetails::getCustomerId,
-                                c -> c,
-                                (a, b) -> a
-                        ));
-        System.out.println("DEBUG customizedMap keys: " + customizedMap.keySet());
-        System.out.println("DEBUG allCustomers ids: " + 
-            allCustomers.stream().map(CustomerDetails::getId).collect(Collectors.toList()));
-
-        // 5. Default pack rows for tomorrow's weekday (statusId=1 filtered by @Where)
-        List<CommonAndPragnentPackDetails> packRows =
-                commonandPragnentpackDetailsRepo.findByWeekdayId(weekdayId);
-
-        // Key: packageTypeId only → pack row
-        // commonandPragnentpackDetails table-la IsEggAdded column illai,
-        // so packageTypeId mattum key-a use panrom.
-        // One packageTypeId → one pack row for a weekday.
-        Map<Integer, CommonAndPragnentPackDetails> packRowMap =
-                packRows.stream()
-                        .collect(Collectors.toMap(
-                                CommonAndPragnentPackDetails::getPackageTypeId,
-                                r -> r,
-                                (a, b) -> a   // duplicate-a vandhā first row eduthuko
-                        ));
-
-        // 6. LKP lookup: id → name  (covers fruits, nuts, optionals — all in same table)
-        Map<Integer, String> lkpMap =
-                lkpFruitAndNutsRepo.findAll()
-                        .stream()
-                        .collect(Collectors.toMap(
-                                LkpFruitAndNuts::getId,
-                                LkpFruitAndNuts::getFruitAndNuts
-                        ));
-
-        // Result accumulators
-        Map<String, Long> fruitCountMap    = new HashMap<>();
-        Map<String, Long> optionalCountMap = new HashMap<>();
-
-        // 7. Loop every active customer
-        // 7a. CUSTOMIZED customers first — independent of allCustomers list
-        for (CustomizedPackageDetails cp : customizedList) {
-            List<Integer> fruitIds = Arrays.asList(
-                    cp.getFruit1Id(), cp.getFruit2Id(), cp.getFruit3Id(),
-                    cp.getFruit4Id(), cp.getFruit5Id(), cp.getFruit6Id()
-            );
-            for (Integer id : fruitIds) {
-                if (id != null && id > 0) {
-                    fruitCountMap.merge(lkpMap.getOrDefault(id, "Unknown(id=" + id + ")"), 1L, Long::sum);
-                }
-            }
-            List<Integer> optIds = Arrays.asList(
-                    cp.getOptional1Id(), cp.getOptional2Id(), cp.getOptional3Id(),
-                    cp.getOptional4Id(), cp.getOptional5Id(), cp.getOptional6Id()
-            );
-            for (Integer id : optIds) {
-                if (id != null && id > 0) {
-                    optionalCountMap.merge(lkpMap.getOrDefault(id, "Unknown(id=" + id + ")"), 1L, Long::sum);
-                }
-            }
-        }
-
-        // 7b. Non-customized active customers — default pack use pannu
-        for (CustomerDetails cd : allCustomers) {
-
-            if (customizedMap.containsKey(cd.getId())) continue; // already counted above
-
-            boolean eggPref    = Boolean.TRUE.equals(cd.isEggPreferd());
-            boolean isPragnent = Boolean.TRUE.equals(cd.isPragnent());
-            boolean isAlergic  = Boolean.TRUE.equals(cd.isAlergic());
-            boolean isCommonFlag = isCommon(isPragnent, isAlergic, false);
-
-            if (isAlergic) {
-                System.out.println("INFO: Skipping allergic customer=" + cd.getId());
-                continue;
-            }
-
-            Integer packageTypeId = PackageTypeRepo.getPackageTypeId(
-                    isPragnent, isAlergic, false, isCommonFlag, cd.getPackDetailsId()
-            ).orElse(null);
-
-            if (packageTypeId == null) continue;
-            if (packageTypeId == 12 || packageTypeId == 13) eggPref = false;
-
-            CommonAndPragnentPackDetails packRow = packRowMap.get(packageTypeId);
-            if (packRow == null) {
-                System.out.println("WARN: No pack row weekdayId=" + weekdayId
-                        + " packageTypeId=" + packageTypeId + " customer=" + cd.getId());
-                continue;
-            }
-
-            List<Integer> fruitIds = Arrays.asList(
-                    packRow.getFruit1Id(), packRow.getFruit2Id(), packRow.getFruit3Id(),
-                    packRow.getFruit4Id(), packRow.getFruit5Id(), packRow.getFruit6Id()
-            );
-            for (Integer id : fruitIds) {
-                if (id != null && id > 0) {
-                    fruitCountMap.merge(lkpMap.getOrDefault(id, "Unknown(id=" + id + ")"), 1L, Long::sum);
-                }
-            }
-
-            List<Integer> optIds = Arrays.asList(
-                    packRow.getOptional1Id(), packRow.getOptional2Id(), packRow.getOptional3Id()
-            );
-            for (Integer id : optIds) {
-                if (id != null && id > 0) {
-                    optionalCountMap.merge(lkpMap.getOrDefault(id, "Unknown(id=" + id + ")"), 1L, Long::sum);
-                }
-            }
-        }
-        // 8. Build response DTO
-        CustomizationSummaryDto dto = new CustomizationSummaryDto();
-        dto.setTotalCustomers(allCustomers.size());
-        dto.setCustomizedCustomers(customizedList.size());
-        dto.setFruitCounts(fruitCountMap);
-        dto.setOptionalCounts(optionalCountMap);
-
-        return dto;
-    }
+//    public CustomizationSummaryDto getTomorrowSummary() {
+//
+//        // 1. Tomorrow's date
+//        LocalDate tomorrow = LocalDate.now().plusDays(1);
+//
+//        // 2. WeekdayId — tomorrow's day value (Mon=1 ... Sun=7)
+//        int weekdayId = getWeekday(tomorrow);
+//
+//        // Time range for querying customizations saved for tomorrow
+//        LocalDateTime start = tomorrow.atStartOfDay();
+//        LocalDateTime end   = tomorrow.atTime(LocalTime.MAX);
+//
+//        System.out.println("DEBUG Date    : " + tomorrow);
+//        System.out.println("DEBUG WeekdayId: " + weekdayId);
+//
+//        // 3. Active customers for tomorrow (customerStatusId = 3)
+//        List<CustomerDetails> allCustomers =
+//                customerDetailsRepo.findActiveTomorrowCustomers();
+//
+//        // 4. Customizations saved for tomorrow (weekdayId + date window)
+//        List<CustomizedPackageDetails> customizedList =
+//                customizedpackagedetailsRepo.getTomorrowCustomizations(weekdayId, start, end);
+//
+//        // Map: customerId → their customization row
+//        Map<Long, CustomizedPackageDetails> customizedMap =
+//                customizedList.stream()
+//                        .collect(Collectors.toMap(
+//                                CustomizedPackageDetails::getCustomerId,
+//                                c -> c,
+//                                (a, b) -> a
+//                        ));
+//        System.out.println("DEBUG customizedMap keys: " + customizedMap.keySet());
+//        System.out.println("DEBUG allCustomers ids: " + 
+//            allCustomers.stream().map(CustomerDetails::getId).collect(Collectors.toList()));
+//
+//        // 5. Default pack rows for tomorrow's weekday (statusId=1 filtered by @Where)
+//        List<CommonAndPragnentPackDetails> packRows =
+//                commonandPragnentpackDetailsRepo.findByWeekdayId(weekdayId);
+//
+//        // Key: packageTypeId only → pack row
+//        // commonandPragnentpackDetails table-la IsEggAdded column illai,
+//        // so packageTypeId mattum key-a use panrom.
+//        // One packageTypeId → one pack row for a weekday.
+//        Map<Integer, CommonAndPragnentPackDetails> packRowMap =
+//                packRows.stream()
+//                        .collect(Collectors.toMap(
+//                                CommonAndPragnentPackDetails::getPackageTypeId,
+//                                r -> r,
+//                                (a, b) -> a   // duplicate-a vandhā first row eduthuko
+//                        ));
+//
+//        // 6. LKP lookup: id → name  (covers fruits, nuts, optionals — all in same table)
+//        Map<Integer, String> lkpMap =
+//                lkpFruitAndNutsRepo.findAll()
+//                        .stream()
+//                        .collect(Collectors.toMap(
+//                                LkpFruitAndNuts::getId,
+//                                LkpFruitAndNuts::getFruitAndNuts
+//                        ));
+//
+//        // Result accumulators
+//        Map<String, Long> fruitCountMap    = new HashMap<>();
+//        Map<String, Long> optionalCountMap = new HashMap<>();
+//
+//        // 7. Loop every active customer
+//        // 7a. CUSTOMIZED customers first — independent of allCustomers list
+//        for (CustomizedPackageDetails cp : customizedList) {
+//            List<Integer> fruitIds = Arrays.asList(
+//                    cp.getFruit1Id(), cp.getFruit2Id(), cp.getFruit3Id(),
+//                    cp.getFruit4Id(), cp.getFruit5Id(), cp.getFruit6Id()
+//            );
+//            for (Integer id : fruitIds) {
+//                if (id != null && id > 0) {
+//                    fruitCountMap.merge(lkpMap.getOrDefault(id, "Unknown(id=" + id + ")"), 1L, Long::sum);
+//                }
+//            }
+//            List<Integer> optIds = Arrays.asList(
+//                    cp.getOptional1Id(), cp.getOptional2Id(), cp.getOptional3Id(),
+//                    cp.getOptional4Id(), cp.getOptional5Id(), cp.getOptional6Id()
+//            );
+//            for (Integer id : optIds) {
+//                if (id != null && id > 0) {
+//                    optionalCountMap.merge(lkpMap.getOrDefault(id, "Unknown(id=" + id + ")"), 1L, Long::sum);
+//                }
+//            }
+//        }
+//
+//        // 7b. Non-customized active customers — default pack use pannu
+//        for (CustomerDetails cd : allCustomers) {
+//
+//            if (customizedMap.containsKey(cd.getId())) continue; // already counted above
+//
+//            boolean eggPref    = Boolean.TRUE.equals(cd.isEggPreferd());
+//            boolean isPragnent = Boolean.TRUE.equals(cd.isPragnent());
+//            boolean isAlergic  = Boolean.TRUE.equals(cd.isAlergic());
+//            boolean isCommonFlag = isCommon(isPragnent, isAlergic, false);
+//
+//            if (isAlergic) {
+//                System.out.println("INFO: Skipping allergic customer=" + cd.getId());
+//                continue;
+//            }
+//
+//            Integer packageTypeId = PackageTypeRepo.getPackageTypeId(
+//                    isPragnent, isAlergic, false, isCommonFlag, cd.getPackDetailsId()
+//            ).orElse(null);
+//
+//            if (packageTypeId == null) continue;
+//            if (packageTypeId == 12 || packageTypeId == 13) eggPref = false;
+//
+//            CommonAndPragnentPackDetails packRow = packRowMap.get(packageTypeId);
+//            if (packRow == null) {
+//                System.out.println("WARN: No pack row weekdayId=" + weekdayId
+//                        + " packageTypeId=" + packageTypeId + " customer=" + cd.getId());
+//                continue;
+//            }
+//
+//            List<Integer> fruitIds = Arrays.asList(
+//                    packRow.getFruit1Id(), packRow.getFruit2Id(), packRow.getFruit3Id(),
+//                    packRow.getFruit4Id(), packRow.getFruit5Id(), packRow.getFruit6Id()
+//            );
+//            for (Integer id : fruitIds) {
+//                if (id != null && id > 0) {
+//                    fruitCountMap.merge(lkpMap.getOrDefault(id, "Unknown(id=" + id + ")"), 1L, Long::sum);
+//                }
+//            }
+//
+//            List<Integer> optIds = Arrays.asList(
+//                    packRow.getOptional1Id(), packRow.getOptional2Id(), packRow.getOptional3Id()
+//            );
+//            for (Integer id : optIds) {
+//                if (id != null && id > 0) {
+//                    optionalCountMap.merge(lkpMap.getOrDefault(id, "Unknown(id=" + id + ")"), 1L, Long::sum);
+//                }
+//            }
+//        }
+//        // 8. Build response DTO
+//        CustomizationSummaryDto dto = new CustomizationSummaryDto();
+//        dto.setTotalCustomers(allCustomers.size());
+//        dto.setCustomizedCustomers(customizedList.size());
+//        dto.setFruitCounts(fruitCountMap);
+//        dto.setOptionalCounts(optionalCountMap);
+//
+//        return dto;
+//    }
 }
