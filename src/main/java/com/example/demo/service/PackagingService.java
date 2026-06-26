@@ -163,7 +163,7 @@ public class PackagingService {
 //		Map<Integer, Integer> districtBoxCounter = new HashMap<>();
 //
 //		for (PackagingDto customer : customers) {
-//			// âœ… Check NextRenewalDate >= deliveryDate
+//			// ✅ Check NextRenewalDate >= deliveryDate
 //			LocalDate renewalDate = customerDetailsRepo
 //					.findNextRenewalDateByCustomerId(customer.getId());
 //			if (renewalDate == null || !renewalDate.isBefore(businessDate.toLocalDate())) {
@@ -185,7 +185,7 @@ public class PackagingService {
 //			            customer.getId(),
 //			            nextRenewal
 //			    );
-//			    continue; // âŒ skip delivery
+//			    continue; // ❌ skip delivery
 //			}
 //
 //			try {
@@ -229,7 +229,7 @@ public class PackagingService {
 
 		LocalDate businessDate;
 
-		// ✅ After 7:30 PM → shift to next day
+		// ? After 7:30 PM ? shift to next day
 		if (now.isAfter(LocalTime.of(19, 30))) {
 		    businessDate = today.plusDays(1);
 		} else {
@@ -241,8 +241,8 @@ public class PackagingService {
 	    }
 
 	    System.out.println("Delivery Date: " + businessDate);
-	    
-	 // ✅ FIND PREVIOUS BUSINESS DAY
+
+	 // ? FIND PREVIOUS BUSINESS DAY
 	    LocalDate previousBusinessDate;
 
 	    if (businessDate.getDayOfWeek() == DayOfWeek.MONDAY) {
@@ -253,7 +253,7 @@ public class PackagingService {
 
 	    System.out.println("Deleting previous boxes for: " + previousBusinessDate);
 
-	    // ✅ DELETE OLD BOXES (IMPORTANT CHANGE)
+	    // ? DELETE OLD BOXES (IMPORTANT CHANGE)
 	    packagingRepo.deleteByDistrictId(districtId, previousBusinessDate);
 //
 //	    // (Optional but recommended) also clear staging if needed
@@ -267,7 +267,7 @@ public class PackagingService {
 	        System.out.println("Boxes already generated for " + businessDate);
 	        return;
 	    }
-	    
+
 	    List<PackagingDto> customers = getSortedPackagesByDistrict(districtId);
 	    Map<Integer, Integer> districtBoxCounter = new HashMap<>();
 
@@ -285,7 +285,7 @@ public class PackagingService {
 	            continue;
 	        }
 
-	        // âœ… Cancel check
+	        // ✅ Cancel check
 	        boolean isCancelled = cancelledDateRepository
 	                .existsByCustomerIdAndCancelledDate(customer.getId(), businessDate);
 
@@ -296,9 +296,9 @@ public class PackagingService {
 	                nextRenewal = nextRenewal.plusDays(1);
 	            }
 	            
-	            Date convertedDate = java.sql.Date.valueOf(nextRenewal);
+	           Date convertedDate = java.sql.Date.valueOf(nextRenewal);
 
-	            customerDetailsRepo.updateRenewalDate(customer.getId(), convertedDate);
+	            customerDetailsRepo.updateRenewalDate(customer.getId(), convertedDate );
 	            continue;
 	        }
 
@@ -328,9 +328,9 @@ public class PackagingService {
 	            entity.setCreatedBy("User");
 	            entity.setCreatedTime(LocalDateTime.now());
 	            entity.setPlanCode(planCode);
-	            entity.setBusinessDate(businessDate); // âœ… SET HERE
+	            entity.setBusinessDate(businessDate); // ✅ SET HERE
 
-	            // âœ… FIRST SAVE (VERY IMPORTANT)
+	            // ✅ FIRST SAVE (VERY IMPORTANT)
 	            entity = packagingRepo.save(entity);
 
 	            // NOW ID IS AVAILABLE
@@ -345,7 +345,7 @@ public class PackagingService {
 	            entity.setQrCode(qrImage);
 	            entity.setNumberCode(numberCode);
 
-	            // âœ… SAVE AGAIN
+	            // ✅ SAVE AGAIN
 	            packagingRepo.save(entity);
 
 	        } catch (Exception e) {
@@ -362,7 +362,16 @@ public class PackagingService {
 	    return count != null && count > 0;
 	}
 	public List<FinalPackDto> getPackageBoxlist(int districtId, long boxnumber) {
-		LocalDate businessDate = LocalDate.now();
+		LocalDate today = LocalDate.now();
+		LocalTime now = LocalTime.now();
+
+		LocalDate businessDate;
+		// ? After 7:30 PM ? shift to next day
+		if (now.isAfter(LocalTime.of(19, 30))) {
+		    businessDate = today.plusDays(1);
+		} else {
+		    businessDate = today;
+		}
 		int weekday = businessDate.getDayOfWeek().getValue();
 		 Packaging data = packagingRepo.findByDistrictIdandBoxNumber(districtId,boxnumber,businessDate);
 		 if (data == null) {
@@ -478,18 +487,16 @@ public class PackagingService {
 				}
 			}
 			// ==========================
-			// Sandwich
+			// Sandwich (single item)
 			// ==========================
 			String sandwichName = (String) row[indexMap.get("sandwichName")];
 
 			if (sandwichName != null) {
-
 			    SimpleIngredient sandwich = new SimpleIngredient(
 			        sandwichName,
-			        null,
+			        null, // ❌ no weight
 			        toBoolean(row[indexMap.get("sandwichPacked")])
 			    );
-
 			    dto.setSandwich(sandwich);
 			}
 
@@ -551,7 +558,7 @@ public class PackagingService {
 	    map.put("jarName", i++);
 	    map.put("jarQuantity", i++);
 	    map.put("jarPacked", i++);
-
+	    
 	    map.put("boxNumber", i++);
 	    map.put("numberCode", i++);
 	    return map;
@@ -661,7 +668,7 @@ public class PackagingService {
 //	    List<String> imageList = new ArrayList<>();
 //
 //	    for (QrCodeProjection data : qrDataList) {
-//	        byte[] qrBytes = data.getQrCode(); // âœ… Directly get bytes
+//	        byte[] qrBytes = data.getQrCode(); // ✅ Directly get bytes
 //
 //	        BufferedImage qrImage = null;
 //	        try {
@@ -720,7 +727,7 @@ public List<String> createImage(List<QrCodeProjection> qrDataList) {
     int DPI = 203;
 
     int qrSize = 180;          // fixed QR size
-    int SIDE_PADDING = 5;     // ðŸ‘ˆ clear left & right padding
+    int SIDE_PADDING = 5;     // 👈 clear left & right padding
     int TOP_PADDING = 10;
     int BOTTOM_PADDING = 10;
 
@@ -777,7 +784,7 @@ public List<String> createImage(List<QrCodeProjection> qrDataList) {
             y += nameFM.getDescent() + 6;
 
             // QR
-            int qrX = SIDE_PADDING; // ðŸ‘ˆ explicit left padding
+            int qrX = SIDE_PADDING; // 👈 explicit left padding
             g.drawImage(qrImage, qrX, y, qrSize, qrSize, null);
             y += qrSize + 6;
 

@@ -1,5 +1,6 @@
 package com.example.demo.service;
 
+import com.example.demo.entity.CustomerDetails;
 import com.example.demo.entity.UserDevice;
 import com.example.demo.entity.UserNotificationPreference;
 import com.example.demo.repo.CustomerDetailsRepo;
@@ -58,7 +59,7 @@ public class NotificationService {
             return;
         }
 
-        logger.info("Sending notification to all users | type={} | eligibleDevices={} | totalDevices={}",
+        logger.info("Sending notification to all users | type={} | eligibleDevices={} | totalDevices={}", 
                    notificationType, eligibleDevices.size(), allDevices.size());
 
         fcmService.sendBatch(eligibleDevices, title, message, notificationType);
@@ -329,19 +330,35 @@ public class NotificationService {
      * Check if user has an active subscription.
      */
     private boolean hasActiveSubscription(Long userId) {
+
         try {
-            return customerDetailsRepo.findById(userId)
-                    .map(customer -> {
-                        // Customer must have payment success and not be cancelled
-                        return customer.isPaymentSuccess() 
-                               && (customer.getIsCancelled() == null || !customer.getIsCancelled());
-                    })
-                    .orElse(false);
+
+            Optional<CustomerDetails> customerOpt =
+                    customerDetailsRepo.findById(userId);
+
+            if (customerOpt.isEmpty()) {
+                return false;
+            }
+
+            CustomerDetails customer = customerOpt.get();
+
+            boolean paymentSuccess = customer.isPaymentSuccess();
+
+            Boolean cancelled = customer.getIsCancelled();
+
+            return paymentSuccess &&
+                    (cancelled == null || !cancelled);
+
         } catch (Exception e) {
-            logger.error("Error checking subscription status for userId={}: {}", userId, e.getMessage());
+
+            logger.error(
+                    "Error checking subscription status for userId={}: {}",
+                    userId,
+                    e.getMessage());
+
             return false;
         }
-    }
+    }   
 
     private void createDefaultPreferencesIfNeeded(Long userId) {
         if (preferenceRepository.findByUserId(userId).isEmpty()) {

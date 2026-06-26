@@ -139,31 +139,32 @@ public interface CustomerDetailsRepo extends JpaRepository<CustomerDetails, Long
 //	        List<Object[]> findAllOrderByZoneDistanceAsc();
 
 	        @Query(value = """
-		            SELECT 
-		                c.Id,
-		                c.ZoneId,
-		                c.DistanceId,
-		                c.DistrictId,
-		                c.DeliveryCode,
-		                c.PackDetailsId,
-		                c.DelivaryTimingId,
-		                c.Name,
-		                c.IsPragnent
-		            FROM 
-		                customerdetails c
-		            WHERE 
-		                c.NextRenewalDate >= CURRENT_DATE
-		                AND c.IsPaymentSuccess = TRUE
-		                AND c.StatusId = 1
-		                And c.DistrictId = :districtId
-		            ORDER BY 
-		                c.DistanceId ASC,
-		                CASE 
-		                    WHEN c.DelivaryTimingId IN (1, 2, 3) THEN 1
-		                    WHEN c.DelivaryTimingId = 4 THEN 2
-		                    ELSE 3
-		                END,
-		                c.DelivaryTimingId ASC
+		            SELECT  
+    c.Id,
+    c.ZoneId,
+    c.DistanceId,
+    c.DistrictId,
+    c.DeliveryCode,
+    c.PackDetailsId,
+    c.DelivaryTimingId,
+    c.Name,
+    c.IsPragnent
+FROM 
+    customerdetails c
+WHERE 
+    c.NextRenewalDate >= CURRENT_DATE
+    AND c.StartDate <= CURRENT_DATE
+    AND c.IsPaymentSuccess = TRUE
+    AND c.StatusId = 1
+    AND c.DistrictId = :districtId
+ORDER BY 
+    c.DistanceId ASC,
+    CASE 
+        WHEN c.DelivaryTimingId IN (1, 2, 3) THEN 1
+        WHEN c.DelivaryTimingId = 4 THEN 2
+        ELSE 3
+    END,
+    c.DelivaryTimingId ASC
 		            """, nativeQuery = true)
 		List<Object[]> findAllByDistrictIdOrdered(int districtId);
 		

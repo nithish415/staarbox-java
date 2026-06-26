@@ -35,12 +35,12 @@ public interface TodaysDeliveryDetailsRepo extends JpaRepository<TodaysDeliveryD
             @Param("boxnumber") long boxnumber
     );
 
-
+	
     // =========================================================
     // UPDATE DELIVERY BOY DETAILS WITH BUSINESS DATE
     // =========================================================
-    @Transactional
-    @Modifying
+	@Transactional
+	@Modifying
     @Query(value = """
             UPDATE todaysdeliverydetails 
             SET DeliveryboyPhoneNumber = :phoneNumber 
@@ -72,8 +72,8 @@ public interface TodaysDeliveryDetailsRepo extends JpaRepository<TodaysDeliveryD
     // =========================================================
     // UPDATE DELIVERY STATUS + DELIVERY TIME
     // =========================================================
-    @Transactional
-    @Modifying
+	@Transactional
+	@Modifying
     @Query(value = """
             UPDATE todaysdeliverydetails 
             SET IsDelivered = :isDelivered,
@@ -86,10 +86,10 @@ public interface TodaysDeliveryDetailsRepo extends JpaRepository<TodaysDeliveryD
             """, nativeQuery = true)
     int updateDeliveredStatus(
             @Param("id") Long id,
-            @Param("isDelivered") Boolean isDelivered,
-            @Param("reasonId") Integer reasonId,
+	                          @Param("isDelivered") Boolean isDelivered, 
+	                          @Param("reasonId") Integer reasonId,
             @Param("deliveredTime") LocalDateTime deliveredTime,
-            @Param("modifiedTime") LocalDateTime modifiedTime,
+	                          @Param("modifiedTime") LocalDateTime modifiedTime,
             @Param("modifiedBy") String modifiedBy
     );
 

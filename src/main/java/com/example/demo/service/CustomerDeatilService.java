@@ -459,7 +459,7 @@ System.out.println(paymentTime);
 
 	    //  Rule 2: Only allow between 9:30 AM  7:30 PM
 	    LocalTime startTime = LocalTime.of(9, 30);
-	    LocalTime endTime   = LocalTime.of(23, 30);
+	    LocalTime endTime   = LocalTime.of(19, 30);
 
 	    LocalTime currentTime = now.toLocalTime();
 System.out.println(currentTime );
